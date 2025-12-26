@@ -1,12 +1,11 @@
 import { http, createConfig } from 'wagmi';
 import { base, baseSepolia } from 'wagmi/chains';
-import { injected, metaMask, coinbaseWallet } from 'wagmi/connectors';
+import { injected, coinbaseWallet } from 'wagmi/connectors';
 
 export const config = createConfig({
   chains: [base, baseSepolia],
   connectors: [
     injected(),
-    metaMask(),
     coinbaseWallet({ appName: 'GMMC Arcade' }),
   ],
   transports: {
