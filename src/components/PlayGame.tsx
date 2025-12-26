@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
 import { parseUnits } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Loader2, AlertCircle, Coins, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GMMC_TOKEN_ADDRESS, ARCADE_CONTRACT_ADDRESS, GMMC_ABI, ARCADE_ABI } from '@/lib/wagmi';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface PlayGameProps {
   userScore: number;
@@ -12,8 +14,9 @@ interface PlayGameProps {
 }
 
 export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const [step, setStep] = useState<'idle' | 'approving' | 'approved' | 'submitting' | 'success'>('idle');
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   
   const { 
     data: approveHash, 
@@ -57,15 +60,39 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
     } as any);
   };
 
-  // Update step based on transaction status
-  if (isApproveSuccess && step === 'approving') {
-    setStep('approved');
-  }
+  // Save score to database when blockchain transaction succeeds
+  const saveScoreToDatabase = async () => {
+    if (!address || hasSubmitted) return;
+    
+    const { error } = await supabase.from('leaderboard').insert({
+      wallet_address: address,
+      score: userScore,
+      tx_hash: playHash,
+    });
 
-  if (isPlaySuccess && step === 'submitting') {
-    setStep('success');
-    onSubmitSuccess?.();
-  }
+    if (error) {
+      console.error('Error saving score:', error);
+      toast.error('Failed to save score to leaderboard');
+    } else {
+      toast.success('Score saved to leaderboard!');
+      setHasSubmitted(true);
+    }
+  };
+
+  // Update step based on transaction status
+  useEffect(() => {
+    if (isApproveSuccess && step === 'approving') {
+      setStep('approved');
+    }
+  }, [isApproveSuccess, step]);
+
+  useEffect(() => {
+    if (isPlaySuccess && step === 'submitting') {
+      setStep('success');
+      saveScoreToDatabase();
+      onSubmitSuccess?.();
+    }
+  }, [isPlaySuccess, step]);
 
   const error = approveError || playError;
 
