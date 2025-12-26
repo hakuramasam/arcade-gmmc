@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Play, RotateCcw, Zap } from 'lucide-react';
+import { Play, RotateCcw, Zap, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSound } from '@/hooks/useSound';
 
 interface GameCanvasProps {
   onScoreUpdate: (score: number) => void;
@@ -24,6 +25,18 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
   const [targets, setTargets] = useState<Target[]>([]);
   const [combo, setCombo] = useState(0);
   const gameAreaRef = useRef<HTMLDivElement>(null);
+  
+  const { 
+    playHit, 
+    playCombo, 
+    playMiss, 
+    playGameStart, 
+    playGameEnd, 
+    startBgMusic, 
+    stopBgMusic,
+    toggleMute,
+    isMuted 
+  } = useSound();
 
   const spawnTarget = useCallback(() => {
     if (!gameAreaRef.current) return;
@@ -49,6 +62,12 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
     const comboMultiplier = Math.min(newCombo, 5);
     const points = target.points * comboMultiplier;
     
+    // Play sounds
+    playHit();
+    if (newCombo > 1) {
+      playCombo(newCombo);
+    }
+    
     setScore(prev => {
       const newScore = prev + points;
       onScoreUpdate(newScore);
@@ -56,9 +75,11 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
     });
     setCombo(newCombo);
     setTargets(prev => prev.filter(t => t.id !== target.id));
-  }, [combo, onScoreUpdate]);
+  }, [combo, onScoreUpdate, playHit, playCombo]);
 
   const startGame = () => {
+    playGameStart();
+    startBgMusic();
     setIsPlaying(true);
     setScore(0);
     setTimeLeft(30);
@@ -67,6 +88,7 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
   };
 
   const resetGame = () => {
+    stopBgMusic();
     setIsPlaying(false);
     setScore(0);
     setTimeLeft(30);
@@ -79,6 +101,8 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
     if (!isPlaying || timeLeft <= 0) {
       if (isPlaying && timeLeft <= 0) {
         setIsPlaying(false);
+        stopBgMusic();
+        playGameEnd();
         onGameEnd(score);
       }
       return;
@@ -89,7 +113,7 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isPlaying, timeLeft, score, onGameEnd]);
+  }, [isPlaying, timeLeft, score, onGameEnd, stopBgMusic, playGameEnd]);
 
   // Spawn targets
   useEffect(() => {
@@ -99,16 +123,19 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
     return () => clearInterval(spawnInterval);
   }, [isPlaying, spawnTarget]);
 
-  // Combo decay
+  // Combo decay with miss sound
   useEffect(() => {
     if (!isPlaying || combo === 0) return;
 
     const decayTimer = setTimeout(() => {
+      if (combo > 2) {
+        playMiss();
+      }
       setCombo(0);
     }, 1500);
 
     return () => clearTimeout(decayTimer);
-  }, [isPlaying, combo, targets]);
+  }, [isPlaying, combo, targets, playMiss]);
 
   // Remove old targets
   useEffect(() => {
@@ -164,6 +191,14 @@ export function GameCanvas({ onScoreUpdate, onGameEnd }: GameCanvasProps) {
           )}
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleMute}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+          </Button>
           {!isPlaying ? (
             <Button variant="arcade" size="lg" onClick={startGame} className="gap-2">
               <Play className="w-5 h-5" />
