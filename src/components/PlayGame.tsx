@@ -46,7 +46,7 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
       address: GMMC_TOKEN_ADDRESS,
       abi: GMMC_ABI,
       functionName: 'approve',
-      args: [ARCADE_CONTRACT_ADDRESS, parseUnits('100', 18)],
+      args: [ARCADE_CONTRACT_ADDRESS, parseUnits('20000', 18)],
     } as any);
   };
 
@@ -241,10 +241,18 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
         )}
       </AnimatePresence>
 
+      {/* Reward Pool */}
+      <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-neon-yellow/10 via-secondary/10 to-primary/10 border border-neon-yellow/30">
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Reward Pool</p>
+          <p className="font-display text-2xl text-neon-yellow text-glow">10,000,000 $GMMC</p>
+        </div>
+      </div>
+
       {/* Token Info */}
-      <div className="mt-6 pt-4 border-t border-border flex items-center justify-center gap-2 text-xs text-muted-foreground">
+      <div className="mt-4 pt-4 border-t border-border flex items-center justify-center gap-2 text-xs text-muted-foreground">
         <Coins className="w-3 h-3" />
-        <span>Cost: 100 $GMMC to submit score</span>
+        <span>Cost: 20,000 $GMMC to submit score</span>
       </div>
     </motion.div>
   );
