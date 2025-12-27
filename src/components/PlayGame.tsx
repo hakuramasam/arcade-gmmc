@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useReadContract } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Loader2, AlertCircle, Coins, Trophy, RefreshCw } from 'lucide-react';
+import { Check, Loader2, AlertCircle, Coins, Trophy, RefreshCw, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GMMC_TOKEN_ADDRESS, ARCADE_CONTRACT_ADDRESS, GMMC_ABI, ARCADE_ABI } from '@/lib/wagmi';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +17,19 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
   const { isConnected, address } = useAccount();
   const [step, setStep] = useState<'idle' | 'approving' | 'approved' | 'submitting' | 'success'>('idle');
   
+  // Read user's wallet balance
+  const { 
+    data: userBalance, 
+    isLoading: isUserBalanceLoading,
+    refetch: refetchUserBalance 
+  } = useReadContract({
+    address: GMMC_TOKEN_ADDRESS,
+    abi: GMMC_ABI,
+    functionName: 'balanceOf',
+    args: [address!],
+    query: { enabled: !!address },
+  });
+
   // Read reward pool balance from contract
   const { 
     data: rewardPoolBalance, 
@@ -29,10 +42,19 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
     args: [ARCADE_CONTRACT_ADDRESS],
   });
 
-  // Format the balance for display
+  // Format balances for display
+  const formattedUserBalance = userBalance 
+    ? Number(formatUnits(userBalance as bigint, 18)).toLocaleString(undefined, { maximumFractionDigits: 0 })
+    : '---';
+    
   const formattedPoolBalance = rewardPoolBalance 
     ? Number(formatUnits(rewardPoolBalance as bigint, 18)).toLocaleString(undefined, { maximumFractionDigits: 0 })
     : '---';
+  
+  // Check if user has enough balance
+  const hasEnoughBalance = userBalance 
+    ? (userBalance as bigint) >= parseUnits('20000', 18)
+    : false;
   const [hasSubmitted, setHasSubmitted] = useState(false);
   
   const { 
@@ -258,26 +280,57 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
         )}
       </AnimatePresence>
 
-      {/* Reward Pool */}
-      <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-neon-yellow/10 via-secondary/10 to-primary/10 border border-neon-yellow/30">
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Reward Pool</p>
-            <button 
-              onClick={() => refetchPool()} 
-              className="text-muted-foreground hover:text-neon-yellow transition-colors"
-              title="Refresh balance"
-            >
-              <RefreshCw className={`w-3 h-3 ${isPoolLoading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-          <p className="font-display text-2xl text-neon-yellow text-glow">
-            {isPoolLoading ? (
-              <span className="animate-pulse">Loading...</span>
-            ) : (
-              `${formattedPoolBalance} $GMMC`
+      {/* Balances Grid */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        {/* User Balance */}
+        <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/30">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Wallet className="w-3 h-3 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Your Balance</p>
+              <button 
+                onClick={() => refetchUserBalance()} 
+                className="text-muted-foreground hover:text-primary transition-colors"
+                title="Refresh balance"
+              >
+                <RefreshCw className={`w-3 h-3 ${isUserBalanceLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <p className={`font-display text-lg ${hasEnoughBalance ? 'text-primary text-glow-cyan' : 'text-destructive'}`}>
+              {isUserBalanceLoading ? (
+                <span className="animate-pulse">...</span>
+              ) : (
+                `${formattedUserBalance}`
+              )}
+            </p>
+            {!hasEnoughBalance && userBalance !== undefined && (
+              <p className="text-xs text-destructive mt-1">Need 20,000 $GMMC</p>
             )}
-          </p>
+          </div>
+        </div>
+
+        {/* Reward Pool */}
+        <div className="p-4 rounded-lg bg-gradient-to-r from-neon-yellow/10 to-secondary/10 border border-neon-yellow/30">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Trophy className="w-3 h-3 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Reward Pool</p>
+              <button 
+                onClick={() => refetchPool()} 
+                className="text-muted-foreground hover:text-neon-yellow transition-colors"
+                title="Refresh balance"
+              >
+                <RefreshCw className={`w-3 h-3 ${isPoolLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <p className="font-display text-lg text-neon-yellow text-glow">
+              {isPoolLoading ? (
+                <span className="animate-pulse">...</span>
+              ) : (
+                `${formattedPoolBalance}`
+              )}
+            </p>
+          </div>
         </div>
       </div>
 
