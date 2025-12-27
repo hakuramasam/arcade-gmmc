@@ -1,0 +1,279 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+/**
+ * @title GMMCArcade
+ * @dev Arcade contract for GMMC token gaming with leaderboard functionality
+ * Deploy via ThirdWeb to Base network
+ */
+contract GMMCArcade is Ownable, ReentrancyGuard {
+    // GMMC Token address on Base
+    IERC20 public immutable gmmcToken;
+    
+    // Entry fee in GMMC tokens (with 18 decimals)
+    uint256 public entryFee = 100 * 10**18; // 100 GMMC
+    
+    // Reward pool percentage (e.g., 80 = 80% goes to pool, 20% to treasury)
+    uint256 public rewardPoolPercentage = 80;
+    
+    // Treasury address for fees
+    address public treasury;
+    
+    // Leaderboard entry structure
+    struct LeaderboardEntry {
+        address player;
+        uint256 score;
+        uint256 timestamp;
+    }
+    
+    // Player stats
+    struct PlayerStats {
+        uint256 gamesPlayed;
+        uint256 highestScore;
+        uint256 totalScore;
+        uint256 lastPlayedAt;
+    }
+    
+    // Leaderboard storage
+    LeaderboardEntry[] public leaderboard;
+    uint256 public maxLeaderboardSize = 100;
+    
+    // Player stats mapping
+    mapping(address => PlayerStats) public playerStats;
+    
+    // Total reward pool
+    uint256 public rewardPool;
+    
+    // Events
+    event GamePlayed(address indexed player, uint256 score, uint256 timestamp);
+    event RewardClaimed(address indexed player, uint256 amount);
+    event EntryFeeUpdated(uint256 newFee);
+    event RewardPoolPercentageUpdated(uint256 newPercentage);
+    event TreasuryUpdated(address newTreasury);
+    event LeaderboardUpdated(address indexed player, uint256 score, uint256 rank);
+    
+    constructor(address _gmmcToken, address _treasury) Ownable(msg.sender) {
+        require(_gmmcToken != address(0), "Invalid token address");
+        require(_treasury != address(0), "Invalid treasury address");
+        gmmcToken = IERC20(_gmmcToken);
+        treasury = _treasury;
+    }
+    
+    /**
+     * @dev Play the game by paying entry fee and submitting score
+     * @param score The player's score from the game
+     */
+    function play(uint256 score) external nonReentrant {
+        require(score > 0 && score <= 15000, "Invalid score range");
+        
+        // Transfer entry fee from player
+        require(
+            gmmcToken.transferFrom(msg.sender, address(this), entryFee),
+            "Entry fee transfer failed"
+        );
+        
+        // Split fee between reward pool and treasury
+        uint256 poolAmount = (entryFee * rewardPoolPercentage) / 100;
+        uint256 treasuryAmount = entryFee - poolAmount;
+        
+        rewardPool += poolAmount;
+        
+        if (treasuryAmount > 0) {
+            require(
+                gmmcToken.transfer(treasury, treasuryAmount),
+                "Treasury transfer failed"
+            );
+        }
+        
+        // Update player stats
+        PlayerStats storage stats = playerStats[msg.sender];
+        stats.gamesPlayed++;
+        stats.totalScore += score;
+        stats.lastPlayedAt = block.timestamp;
+        
+        if (score > stats.highestScore) {
+            stats.highestScore = score;
+        }
+        
+        // Update leaderboard
+        _updateLeaderboard(msg.sender, score);
+        
+        emit GamePlayed(msg.sender, score, block.timestamp);
+    }
+    
+    /**
+     * @dev Internal function to update the leaderboard
+     */
+    function _updateLeaderboard(address player, uint256 score) internal {
+        LeaderboardEntry memory newEntry = LeaderboardEntry({
+            player: player,
+            score: score,
+            timestamp: block.timestamp
+        });
+        
+        // Find position for new entry
+        uint256 insertIndex = leaderboard.length;
+        for (uint256 i = 0; i < leaderboard.length; i++) {
+            if (score > leaderboard[i].score) {
+                insertIndex = i;
+                break;
+            }
+        }
+        
+        // If score qualifies for leaderboard
+        if (insertIndex < maxLeaderboardSize) {
+            if (leaderboard.length < maxLeaderboardSize) {
+                leaderboard.push(newEntry);
+            }
+            
+            // Shift entries down and insert new entry
+            for (uint256 i = leaderboard.length - 1; i > insertIndex; i--) {
+                leaderboard[i] = leaderboard[i - 1];
+            }
+            leaderboard[insertIndex] = newEntry;
+            
+            // Trim if necessary
+            if (leaderboard.length > maxLeaderboardSize) {
+                leaderboard.pop();
+            }
+            
+            emit LeaderboardUpdated(player, score, insertIndex + 1);
+        }
+    }
+    
+    /**
+     * @dev Get the full leaderboard
+     */
+    function getLeaderboard() external view returns (LeaderboardEntry[] memory) {
+        return leaderboard;
+    }
+    
+    /**
+     * @dev Get leaderboard with pagination
+     */
+    function getLeaderboardPaginated(uint256 offset, uint256 limit) 
+        external 
+        view 
+        returns (LeaderboardEntry[] memory) 
+    {
+        if (offset >= leaderboard.length) {
+            return new LeaderboardEntry[](0);
+        }
+        
+        uint256 end = offset + limit;
+        if (end > leaderboard.length) {
+            end = leaderboard.length;
+        }
+        
+        LeaderboardEntry[] memory result = new LeaderboardEntry[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            result[i - offset] = leaderboard[i];
+        }
+        
+        return result;
+    }
+    
+    /**
+     * @dev Get player stats
+     */
+    function getPlayerStats(address player) external view returns (PlayerStats memory) {
+        return playerStats[player];
+    }
+    
+    /**
+     * @dev Get current reward pool balance
+     */
+    function getRewardPoolBalance() external view returns (uint256) {
+        return rewardPool;
+    }
+    
+    /**
+     * @dev Get leaderboard size
+     */
+    function getLeaderboardSize() external view returns (uint256) {
+        return leaderboard.length;
+    }
+    
+    // Admin functions
+    
+    /**
+     * @dev Update entry fee (only owner)
+     */
+    function setEntryFee(uint256 _newFee) external onlyOwner {
+        require(_newFee > 0, "Fee must be greater than 0");
+        entryFee = _newFee;
+        emit EntryFeeUpdated(_newFee);
+    }
+    
+    /**
+     * @dev Update reward pool percentage (only owner)
+     */
+    function setRewardPoolPercentage(uint256 _percentage) external onlyOwner {
+        require(_percentage <= 100, "Percentage cannot exceed 100");
+        rewardPoolPercentage = _percentage;
+        emit RewardPoolPercentageUpdated(_percentage);
+    }
+    
+    /**
+     * @dev Update treasury address (only owner)
+     */
+    function setTreasury(address _treasury) external onlyOwner {
+        require(_treasury != address(0), "Invalid treasury address");
+        treasury = _treasury;
+        emit TreasuryUpdated(_treasury);
+    }
+    
+    /**
+     * @dev Update max leaderboard size (only owner)
+     */
+    function setMaxLeaderboardSize(uint256 _size) external onlyOwner {
+        require(_size > 0, "Size must be greater than 0");
+        maxLeaderboardSize = _size;
+    }
+    
+    /**
+     * @dev Distribute rewards to top players (only owner)
+     * @param recipients Array of recipient addresses
+     * @param amounts Array of amounts to distribute
+     */
+    function distributeRewards(
+        address[] calldata recipients,
+        uint256[] calldata amounts
+    ) external onlyOwner nonReentrant {
+        require(recipients.length == amounts.length, "Arrays length mismatch");
+        
+        uint256 totalAmount = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalAmount += amounts[i];
+        }
+        
+        require(totalAmount <= rewardPool, "Insufficient reward pool");
+        
+        rewardPool -= totalAmount;
+        
+        for (uint256 i = 0; i < recipients.length; i++) {
+            require(
+                gmmcToken.transfer(recipients[i], amounts[i]),
+                "Reward transfer failed"
+            );
+            emit RewardClaimed(recipients[i], amounts[i]);
+        }
+    }
+    
+    /**
+     * @dev Emergency withdraw (only owner)
+     */
+    function emergencyWithdraw() external onlyOwner {
+        uint256 balance = gmmcToken.balanceOf(address(this));
+        require(balance > 0, "No balance to withdraw");
+        require(
+            gmmcToken.transfer(owner(), balance),
+            "Withdrawal failed"
+        );
+        rewardPool = 0;
+    }
+}
