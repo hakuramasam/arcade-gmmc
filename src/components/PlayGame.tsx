@@ -99,22 +99,36 @@ export function PlayGame({ userScore, onSubmitSuccess }: PlayGameProps) {
     } as any);
   };
 
-  // Save score to database when blockchain transaction succeeds
+  // Save score to database via edge function (server-side validation)
   const saveScoreToDatabase = async () => {
     if (!address || hasSubmitted) return;
     
-    const { error } = await supabase.from('leaderboard').insert({
-      wallet_address: address,
-      score: userScore,
-      tx_hash: playHash,
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('submit-score', {
+        body: {
+          wallet_address: address,
+          score: userScore,
+          tx_hash: playHash || null,
+        },
+      });
 
-    if (error) {
-      console.error('Error saving score:', error);
-      toast.error('Failed to save score to leaderboard');
-    } else {
+      if (error) {
+        console.error('Error saving score:', error);
+        toast.error('Failed to save score to leaderboard');
+        return;
+      }
+
+      if (data?.error) {
+        console.error('Server error:', data.error);
+        toast.error(data.error);
+        return;
+      }
+
       toast.success('Score saved to leaderboard!');
       setHasSubmitted(true);
+    } catch (err) {
+      console.error('Unexpected error saving score:', err);
+      toast.error('Failed to save score to leaderboard');
     }
   };
 
