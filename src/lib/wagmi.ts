@@ -16,7 +16,7 @@ export const config = createConfig({
 
 // Contract addresses
 export const GMMC_TOKEN_ADDRESS = '0x3D9B15274E579411555FF1F96fE9E1ABf3Df4b07' as const;
-export const ARCADE_CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000' as const; // Replace with deployed contract
+export const ARCADE_CONTRACT_ADDRESS = '0x55aEc4bB8C328f4f3F0B62Cf066b5C9D51D9a6F1' as const; // Replace with deployed contract
 
 // ABIs
 export const GMMC_ABI = [
