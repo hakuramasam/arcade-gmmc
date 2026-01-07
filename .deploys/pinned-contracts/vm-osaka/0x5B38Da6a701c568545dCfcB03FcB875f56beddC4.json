@@ -1,0 +1,13 @@
+{
+  "name": "Delegated ReentrancyGuard",
+  "address": "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "ReentrancyGuardReentrantCall",
+      "type": "error"
+    }
+  ],
+  "filePath": "arcade-gmmc.git/@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+  "pinnedAt": 1767481496166
+}
