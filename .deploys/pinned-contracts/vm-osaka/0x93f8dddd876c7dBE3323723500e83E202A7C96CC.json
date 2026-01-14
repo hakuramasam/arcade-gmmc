@@ -1,6 +1,6 @@
 {
   "name": "GMMCArcade",
-  "address": "0x7EF2e0048f5bAeDe046f6BF797943daF4ED8CB47",
+  "address": "0x93f8dddd876c7dBE3323723500e83E202A7C96CC",
   "abi": [
     {
       "inputs": [
@@ -576,5 +576,5 @@
     }
   ],
   "filePath": "arcade-gmmc.git/contracts/GMMCArcade.sol",
-  "pinnedAt": 1768418543458
+  "pinnedAt": 1768418549490
 }
